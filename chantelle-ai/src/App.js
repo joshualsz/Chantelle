@@ -1,9 +1,10 @@
 // src/App.js
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Zap, User, LogIn, UserPlus, Menu, X } from 'lucide-react';
+import { Upload, FileText, Zap, User, LogIn, UserPlus, Menu, X, Target } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { resumeOptimizationService, analyticsService } from './services/firestoreService';
 import PDFUpload from './components/PDFUpload';
+import JobTracker from './components/JobTracker';
 
 // Main App Component wrapped with AuthProvider
 function App() {
@@ -114,6 +115,12 @@ const ChantelleAI = () => {
                   Optimizer
                 </button>
                 <button 
+                  onClick={() => setCurrentView('tracker')}
+                  className={`px-4 py-2 rounded-lg transition-colors ${currentView === 'tracker' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-purple-600'}`}
+                >
+                  Tracker
+                </button>
+                <button 
                   onClick={() => setCurrentView('dashboard')}
                   className={`px-4 py-2 rounded-lg transition-colors ${currentView === 'dashboard' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-purple-600'}`}
                 >
@@ -169,6 +176,12 @@ const ChantelleAI = () => {
                   className="block w-full text-left px-4 py-2 text-gray-600 hover:bg-purple-50 rounded-lg"
                 >
                   Optimizer
+                </button>
+                <button 
+                  onClick={() => { setCurrentView('tracker'); setMobileMenuOpen(false); }}
+                  className="block w-full text-left px-4 py-2 text-gray-600 hover:bg-purple-50 rounded-lg"
+                >
+                  Tracker
                 </button>
                 <button 
                   onClick={() => { setCurrentView('dashboard'); setMobileMenuOpen(false); }}
@@ -677,6 +690,7 @@ Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
       
       {currentView === 'home' && <LandingPage />}
       {currentView === 'optimizer' && <ResumeOptimizer />}
+      {currentView === 'tracker' && <JobTracker currentUser={currentUser} />}
       {currentView === 'dashboard' && <Dashboard />}
       
       {showAuthModal && <AuthModal />}
