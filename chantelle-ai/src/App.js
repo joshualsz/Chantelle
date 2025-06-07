@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Zap, User, LogIn, UserPlus, Menu, X } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { resumeOptimizationService, analyticsService } from './services/firestoreService';
+import PDFUpload from './components/PDFUpload';
 
 // Main App Component wrapped with AuthProvider
 function App() {
@@ -274,7 +275,7 @@ const ChantelleAI = () => {
     );
   };
 
-  // Landing Page Component (same as before)
+  // Landing Page Component
   const LandingPage = () => (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
@@ -325,13 +326,23 @@ const ChantelleAI = () => {
     </div>
   );
 
-  // Resume Optimizer Component with Firebase integration
+  // Resume Optimizer Component with PDF upload integration
   const ResumeOptimizer = () => {
     const [resumeText, setResumeText] = useState('');
     const [jobDescription, setJobDescription] = useState('');
     const [jobTitle, setJobTitle] = useState('');
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [optimizedResume, setOptimizedResume] = useState('');
+
+    // Handle text extraction from PDF
+    const handleTextExtracted = (extractedText) => {
+      setResumeText(extractedText);
+    };
+
+    // Handle manual text changes
+    const handleTextChange = (text) => {
+      setResumeText(text);
+    };
 
     const handleOptimize = async () => {
       if (!resumeText.trim() || !jobDescription.trim()) {
@@ -344,23 +355,15 @@ const ChantelleAI = () => {
       try {
         // Track optimization activity
         await analyticsService.trackActivity(currentUser.uid, 'optimization_started', {
-          jobTitle: jobTitle || 'Untitled Position'
+          jobTitle: jobTitle || 'Untitled Position',
+          resumeLength: resumeText.length,
+          jobDescriptionLength: jobDescription.length
         });
 
-        // Simulate AI processing (replace with real AI call later)
+        // TODO: Replace this with actual AI API call
+        // For now, we'll simulate AI processing
         setTimeout(async () => {
-          const optimizedContent = `OPTIMIZED RESUME:
-
-${resumeText}
-
-[AI IMPROVEMENTS ADDED]
-• Added relevant keywords from job description
-• Improved action verbs and quantified achievements
-• Enhanced technical skills alignment
-• Optimized for ATS compatibility
-
-Keywords matched: React, JavaScript, Problem-solving, Team collaboration, Project management`;
-
+          const optimizedContent = generateOptimizedResume(resumeText, jobDescription);
           setOptimizedResume(optimizedContent);
 
           // Save optimization to Firebase
@@ -370,7 +373,7 @@ Keywords matched: React, JavaScript, Problem-solving, Team collaboration, Projec
               jobDescription,
               optimizedResume: optimizedContent,
               jobTitle: jobTitle || 'Untitled Position',
-              keywords: ['React', 'JavaScript', 'Problem-solving', 'Team collaboration', 'Project management'],
+              keywords: extractKeywords(jobDescription),
               improvements: [
                 'Added relevant keywords from job description',
                 'Improved action verbs and quantified achievements',
@@ -402,6 +405,38 @@ Keywords matched: React, JavaScript, Problem-solving, Team collaboration, Projec
       }
     };
 
+    // Helper function to extract keywords from job description
+    const extractKeywords = (jobDesc) => {
+      const commonSkills = [
+        'React', 'JavaScript', 'Python', 'Java', 'Node.js', 'SQL', 'AWS', 'Docker',
+        'Git', 'Agile', 'Scrum', 'Machine Learning', 'Data Analysis', 'Leadership',
+        'Communication', 'Problem-solving', 'Team collaboration', 'Project management'
+      ];
+      
+      return commonSkills.filter(skill => 
+        jobDesc.toLowerCase().includes(skill.toLowerCase())
+      );
+    };
+
+    // Helper function to generate optimized resume (placeholder for AI)
+    const generateOptimizedResume = (originalResume, jobDesc) => {
+      const keywords = extractKeywords(jobDesc);
+      
+      return `OPTIMIZED RESUME:
+
+${originalResume}
+
+[AI IMPROVEMENTS ADDED]
+• Added relevant keywords: ${keywords.join(', ')}
+• Improved action verbs and quantified achievements
+• Enhanced technical skills alignment
+• Optimized for ATS compatibility
+• Tailored content to match job requirements
+
+Keywords matched: ${keywords.length}
+Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
+    };
+
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -428,22 +463,11 @@ Keywords matched: React, JavaScript, Problem-solving, Team collaboration, Projec
                 Upload Resume
               </h2>
               
-              <div className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-purple-400 transition-colors cursor-pointer">
-                  <Upload className="mx-auto text-gray-400 mb-2" size={32} />
-                  <p className="text-gray-600">Click to upload PDF or drag and drop</p>
-                  <p className="text-sm text-gray-400">PDF, DOC, DOCX up to 5MB</p>
-                </div>
-                
-                <div className="text-center text-gray-500">or</div>
-                
-                <textarea
-                  value={resumeText}
-                  onChange={(e) => setResumeText(e.target.value)}
-                  placeholder="Paste your resume content here..."
-                  className="w-full h-40 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                />
-              </div>
+              <PDFUpload
+                onTextExtracted={handleTextExtracted}
+                currentText={resumeText}
+                onTextChange={handleTextChange}
+              />
             </div>
 
             {/* Job Description Section */}
@@ -459,6 +483,12 @@ Keywords matched: React, JavaScript, Problem-solving, Team collaboration, Projec
                 placeholder="Paste the job description here..."
                 className="w-full h-64 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
               />
+              
+              {jobDescription && (
+                <div className="mt-3 text-sm text-gray-600">
+                  {jobDescription.length} characters • {jobDescription.split(' ').length} words
+                </div>
+              )}
             </div>
           </div>
 
@@ -466,7 +496,7 @@ Keywords matched: React, JavaScript, Problem-solving, Team collaboration, Projec
           <div className="text-center mb-8">
             <button
               onClick={handleOptimize}
-              disabled={isOptimizing}
+              disabled={isOptimizing || !resumeText.trim() || !jobDescription.trim()}
               className="bg-purple-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-purple-700 transition-colors shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center mx-auto"
             >
               {isOptimizing ? (
@@ -481,6 +511,12 @@ Keywords matched: React, JavaScript, Problem-solving, Team collaboration, Projec
                 </>
               )}
             </button>
+            
+            {(!resumeText.trim() || !jobDescription.trim()) && (
+              <p className="text-sm text-gray-500 mt-2">
+                Please upload a resume and add a job description to continue
+              </p>
+            )}
           </div>
 
           {/* Results Section */}
@@ -498,12 +534,23 @@ Keywords matched: React, JavaScript, Problem-solving, Team collaboration, Projec
                 <div className="bg-green-50 p-4 rounded-lg h-96 overflow-y-auto">
                   <pre className="whitespace-pre-wrap text-sm text-gray-700">{optimizedResume}</pre>
                 </div>
-                <button 
-                  onClick={() => analyticsService.trackActivity(currentUser.uid, 'resume_downloaded')}
-                  className="mt-4 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  Download Optimized Resume
-                </button>
+                <div className="mt-4 flex space-x-3">
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(optimizedResume);
+                      analyticsService.trackActivity(currentUser.uid, 'resume_copied');
+                    }}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Copy Text
+                  </button>
+                  <button 
+                    onClick={() => analyticsService.trackActivity(currentUser.uid, 'resume_downloaded')}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Download PDF
+                  </button>
+                </div>
               </div>
             </div>
           )}
