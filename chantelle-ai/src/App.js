@@ -1,10 +1,10 @@
 // src/App.js
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Zap, User, LogIn, UserPlus, Menu, X, Target } from 'lucide-react';
+import { Upload, FileText, Zap, User, LogIn, UserPlus, Menu, X, BarChart, Target, Lightbulb } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { resumeOptimizationService, analyticsService } from './services/firestoreService';
+import geminiService from './services/geminiService';
 import PDFUpload from './components/PDFUpload';
-import JobTracker from './components/JobTracker';
 
 // Main App Component wrapped with AuthProvider
 function App() {
@@ -44,7 +44,7 @@ const ChantelleAI = () => {
     }
   };
 
-  // Handle authentication
+  // Handle authentication (keeping original auth logic)
   const handleAuth = async (e, email, password) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -57,7 +57,6 @@ const ChantelleAI = () => {
       }
       setShowAuthModal(false);
       
-      // Track user activity
       if (currentUser) {
         await analyticsService.trackActivity(currentUser.uid, 'user_login');
       }
@@ -69,7 +68,6 @@ const ChantelleAI = () => {
     }
   };
 
-  // Handle Google sign in
   const handleGoogleSignIn = async () => {
     setAuthLoading(true);
     try {
@@ -83,7 +81,6 @@ const ChantelleAI = () => {
     }
   };
 
-  // Handle logout
   const handleLogout = async () => {
     try {
       await logout();
@@ -93,7 +90,7 @@ const ChantelleAI = () => {
     }
   };
 
-  // Navigation Component
+  // Navigation Component (keeping original)
   const Navigation = () => (
     <nav className="bg-white/90 backdrop-blur-lg border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -113,12 +110,6 @@ const ChantelleAI = () => {
                   className={`px-4 py-2 rounded-lg transition-colors ${currentView === 'optimizer' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-purple-600'}`}
                 >
                   Optimizer
-                </button>
-                <button 
-                  onClick={() => setCurrentView('tracker')}
-                  className={`px-4 py-2 rounded-lg transition-colors ${currentView === 'tracker' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:text-purple-600'}`}
-                >
-                  Tracker
                 </button>
                 <button 
                   onClick={() => setCurrentView('dashboard')}
@@ -166,7 +157,7 @@ const ChantelleAI = () => {
           </div>
         </div>
 
-        {/* Mobile Navigation */}
+        {/* Mobile Navigation (keeping original) */}
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-gray-200">
             {currentUser ? (
@@ -176,12 +167,6 @@ const ChantelleAI = () => {
                   className="block w-full text-left px-4 py-2 text-gray-600 hover:bg-purple-50 rounded-lg"
                 >
                   Optimizer
-                </button>
-                <button 
-                  onClick={() => { setCurrentView('tracker'); setMobileMenuOpen(false); }}
-                  className="block w-full text-left px-4 py-2 text-gray-600 hover:bg-purple-50 rounded-lg"
-                >
-                  Tracker
                 </button>
                 <button 
                   onClick={() => { setCurrentView('dashboard'); setMobileMenuOpen(false); }}
@@ -218,7 +203,7 @@ const ChantelleAI = () => {
     </nav>
   );
 
-  // Auth Modal Component
+  // Auth Modal Component (keeping original)
   const AuthModal = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -288,7 +273,7 @@ const ChantelleAI = () => {
     );
   };
 
-  // Landing Page Component
+  // Landing Page Component (keeping original)
   const LandingPage = () => (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
@@ -331,132 +316,117 @@ const ChantelleAI = () => {
             <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
               <Zap className="text-green-600" size={32} />
             </div>
-            <h3 className="text-xl font-semibold mb-3">Get Optimized Resume</h3>
-            <p className="text-gray-600">Receive an AI-optimized resume with relevant keywords and improvements.</p>
+            <h3 className="text-xl font-semibold mb-3">Get AI-Optimized Resume</h3>
+            <p className="text-gray-600">Receive an AI-optimized resume with relevant keywords and ATS improvements.</p>
           </div>
         </div>
       </div>
     </div>
   );
 
-  // Resume Optimizer Component with PDF upload integration
+  // Enhanced Resume Optimizer Component with Gemini AI and PDFUpload
   const ResumeOptimizer = () => {
     const [resumeText, setResumeText] = useState('');
     const [jobDescription, setJobDescription] = useState('');
     const [jobTitle, setJobTitle] = useState('');
     const [isOptimizing, setIsOptimizing] = useState(false);
-    const [optimizedResume, setOptimizedResume] = useState('');
+    const [optimizationResult, setOptimizationResult] = useState(null);
+    const [error, setError] = useState('');
+    const [analysisResult, setAnalysisResult] = useState(null);
 
-    // Handle text extraction from PDF
+    // Handle text extracted from PDF/file upload
     const handleTextExtracted = (extractedText) => {
       setResumeText(extractedText);
     };
 
     // Handle manual text changes
-    const handleTextChange = (text) => {
+    const handleResumeTextChange = (text) => {
       setResumeText(text);
     };
 
     const handleOptimize = async () => {
       if (!resumeText.trim() || !jobDescription.trim()) {
-        alert('Please provide both resume content and job description');
+        setError('Please provide both resume content and job description');
         return;
       }
 
       setIsOptimizing(true);
+      setError('');
       
       try {
         // Track optimization activity
         await analyticsService.trackActivity(currentUser.uid, 'optimization_started', {
-          jobTitle: jobTitle || 'Untitled Position',
-          resumeLength: resumeText.length,
-          jobDescriptionLength: jobDescription.length
+          jobTitle: jobTitle || 'Untitled Position'
         });
 
-        // TODO: Replace this with actual AI API call
-        // For now, we'll simulate AI processing
-        setTimeout(async () => {
-          const optimizedContent = generateOptimizedResume(resumeText, jobDescription);
-          setOptimizedResume(optimizedContent);
+        // Call Gemini AI service
+        const result = await geminiService.optimizeResume(resumeText, jobDescription, jobTitle);
+        
+        setOptimizationResult(result);
 
-          // Save optimization to Firebase
-          try {
-            await resumeOptimizationService.saveOptimization(currentUser.uid, {
-              originalResume: resumeText,
-              jobDescription,
-              optimizedResume: optimizedContent,
-              jobTitle: jobTitle || 'Untitled Position',
-              keywords: extractKeywords(jobDescription),
-              improvements: [
-                'Added relevant keywords from job description',
-                'Improved action verbs and quantified achievements',
-                'Enhanced technical skills alignment',
-                'Optimized for ATS compatibility'
-              ]
-            });
+        // Save optimization to Firebase
+        try {
+          await resumeOptimizationService.saveOptimization(currentUser.uid, {
+            originalResume: resumeText,
+            jobDescription,
+            optimizedResume: result.optimizedResume,
+            jobTitle: jobTitle || 'Untitled Position',
+            keywords: result.keywords,
+            improvements: result.improvements,
+            atsScore: result.atsScore,
+            suggestions: result.suggestions || []
+          });
 
-            // Reload user optimizations
-            await loadUserOptimizations();
+          // Reload user optimizations
+          await loadUserOptimizations();
 
-            // Track completion
-            await analyticsService.trackActivity(currentUser.uid, 'optimization_completed', {
-              jobTitle: jobTitle || 'Untitled Position'
-            });
+          // Track completion
+          await analyticsService.trackActivity(currentUser.uid, 'optimization_completed', {
+            jobTitle: jobTitle || 'Untitled Position',
+            atsScore: result.atsScore
+          });
 
-          } catch (error) {
-            console.error('Error saving optimization:', error);
-            alert('Optimization completed but failed to save. Please try again.');
-          }
+        } catch (saveError) {
+          console.error('Error saving optimization:', saveError);
+          setError('Optimization completed but failed to save. Please try again.');
+        }
 
-          setIsOptimizing(false);
-        }, 3000);
-
-      } catch (error) {
-        console.error('Error during optimization:', error);
-        alert('Optimization failed. Please try again.');
+      } catch (optimizationError) {
+        console.error('Error during optimization:', optimizationError);
+        setError(`Optimization failed: ${optimizationError.message}`);
+      } finally {
         setIsOptimizing(false);
       }
     };
 
-    // Helper function to extract keywords from job description
-    const extractKeywords = (jobDesc) => {
-      const commonSkills = [
-        'React', 'JavaScript', 'Python', 'Java', 'Node.js', 'SQL', 'AWS', 'Docker',
-        'Git', 'Agile', 'Scrum', 'Machine Learning', 'Data Analysis', 'Leadership',
-        'Communication', 'Problem-solving', 'Team collaboration', 'Project management'
-      ];
-      
-      return commonSkills.filter(skill => 
-        jobDesc.toLowerCase().includes(skill.toLowerCase())
-      );
-    };
+    const handleAnalyze = async () => {
+      if (!resumeText.trim() || !jobDescription.trim()) {
+        setError('Please provide both resume content and job description');
+        return;
+      }
 
-    // Helper function to generate optimized resume (placeholder for AI)
-    const generateOptimizedResume = (originalResume, jobDesc) => {
-      const keywords = extractKeywords(jobDesc);
-      
-      return `OPTIMIZED RESUME:
-
-${originalResume}
-
-[AI IMPROVEMENTS ADDED]
-• Added relevant keywords: ${keywords.join(', ')}
-• Improved action verbs and quantified achievements
-• Enhanced technical skills alignment
-• Optimized for ATS compatibility
-• Tailored content to match job requirements
-
-Keywords matched: ${keywords.length}
-Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
+      try {
+        const analysis = await geminiService.analyzeResumeMatch(resumeText, jobDescription);
+        setAnalysisResult(analysis);
+      } catch (error) {
+        console.error('Analysis failed:', error);
+        setError('Resume analysis failed. Please try again.');
+      }
     };
 
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">Resume Optimizer</h1>
-            <p className="text-gray-600">Upload your resume and job description to get AI-powered optimizations</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">AI-Powered Resume Optimizer</h1>
+            <p className="text-gray-600">Upload your resume and job description to get AI-powered optimizations using Google Gemini</p>
           </div>
+
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
 
           <div className="mb-6">
             <input
@@ -469,17 +439,17 @@ Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
           </div>
 
           <div className="grid lg:grid-cols-2 gap-8 mb-8">
-            {/* Resume Upload Section */}
+            {/* Resume Upload Section - Now using PDFUpload component */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-xl font-semibold mb-4 flex items-center">
                 <Upload className="mr-2" size={20} />
                 Upload Resume
               </h2>
               
-              <PDFUpload
+              <PDFUpload 
                 onTextExtracted={handleTextExtracted}
                 currentText={resumeText}
-                onTextChange={handleTextChange}
+                onTextChange={handleResumeTextChange}
               />
             </div>
 
@@ -496,73 +466,204 @@ Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
                 placeholder="Paste the job description here..."
                 className="w-full h-64 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
               />
-              
-              {jobDescription && (
-                <div className="mt-3 text-sm text-gray-600">
-                  {jobDescription.length} characters • {jobDescription.split(' ').length} words
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Optimize Button */}
-          <div className="text-center mb-8">
+          {/* Action Buttons */}
+          <div className="flex justify-center space-x-4 mb-8">
+            <button
+              onClick={handleAnalyze}
+              disabled={isOptimizing}
+              className="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            >
+              <BarChart className="mr-2" size={20} />
+              Analyze Match
+            </button>
+            
             <button
               onClick={handleOptimize}
-              disabled={isOptimizing || !resumeText.trim() || !jobDescription.trim()}
-              className="bg-purple-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-purple-700 transition-colors shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center mx-auto"
+              disabled={isOptimizing}
+              className="bg-purple-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-purple-700 transition-colors shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
               {isOptimizing ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Optimizing...
+                  Optimizing with Gemini AI...
                 </>
               ) : (
                 <>
                   <Zap className="mr-2" size={20} />
-                  Optimize Resume
+                  Optimize with Gemini AI
                 </>
               )}
             </button>
-            
-            {(!resumeText.trim() || !jobDescription.trim()) && (
-              <p className="text-sm text-gray-500 mt-2">
-                Please upload a resume and add a job description to continue
-              </p>
-            )}
           </div>
 
-          {/* Results Section */}
-          {optimizedResume && (
-            <div className="grid lg:grid-cols-2 gap-8">
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h3 className="text-lg font-semibold mb-4 text-gray-700">Your Original Resume</h3>
-                <div className="bg-gray-50 p-4 rounded-lg h-96 overflow-y-auto">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-700">{resumeText}</pre>
+          {/* Analysis Results */}
+          {analysisResult && (
+            <div className="mb-8 bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center">
+                <Target className="mr-2" size={20} />
+                Resume Match Analysis
+              </h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <div className="mb-4">
+                    <span className="text-sm font-medium text-gray-600">Match Percentage</span>
+                    <div className="mt-2">
+                      <div className="bg-gray-200 rounded-full h-3">
+                        <div 
+                          className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                          style={{ width: `${analysisResult.matchPercentage}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-sm font-bold text-green-600">{analysisResult.matchPercentage}%</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-green-700 mb-2">Strengths</h4>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      {analysisResult.strengths?.map((strength, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-green-500 mr-2">✓</span>
+                          {strength}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="mb-4">
+                    <h4 className="font-medium text-red-700 mb-2">Areas for Improvement</h4>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      {analysisResult.gaps?.map((gap, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-red-500 mr-2">✗</span>
+                          {gap}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-blue-700 mb-2">Recommendations</h4>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      {analysisResult.recommendations?.map((rec, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-blue-500 mr-2">→</span>
+                          {rec}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
-              
+            </div>
+          )}
+
+          {/* Optimization Results */}
+          {optimizationResult && (
+            <div className="space-y-8">
+              {/* ATS Score and Metrics */}
               <div className="bg-white rounded-xl shadow-lg p-6">
-                <h3 className="text-lg font-semibold mb-4 text-green-700">AI-Optimized Resume</h3>
-                <div className="bg-green-50 p-4 rounded-lg h-96 overflow-y-auto">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-700">{optimizedResume}</pre>
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <BarChart className="mr-2" size={20} />
+                  Optimization Results
+                </h3>
+                
+                <div className="grid md:grid-cols-3 gap-6 mb-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-600">{optimizationResult.atsScore}%</div>
+                    <div className="text-sm text-gray-600">ATS Compatibility Score</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-600">{optimizationResult.keywords?.length || 0}</div>
+                    <div className="text-sm text-gray-600">Keywords Added</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-purple-600">{optimizationResult.improvements?.length || 0}</div>
+                    <div className="text-sm text-gray-600">Improvements Made</div>
+                  </div>
                 </div>
-                <div className="mt-4 flex space-x-3">
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(optimizedResume);
-                      analyticsService.trackActivity(currentUser.uid, 'resume_copied');
-                    }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Copy Text
-                  </button>
-                  <button 
-                    onClick={() => analyticsService.trackActivity(currentUser.uid, 'resume_downloaded')}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    Download PDF
-                  </button>
+
+                {/* Keywords and Improvements */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Keywords Added</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {optimizationResult.keywords?.map((keyword, index) => (
+                        <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                          {keyword}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-3">Key Improvements</h4>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      {optimizationResult.improvements?.map((improvement, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-green-500 mr-2">✓</span>
+                          {improvement}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Additional Suggestions */}
+                {optimizationResult.suggestions?.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                      <Lightbulb className="mr-2" size={16} />
+                      Additional Suggestions
+                    </h4>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      {optimizationResult.suggestions.map((suggestion, index) => (
+                        <li key={index} className="flex items-start">
+                          <span className="text-yellow-500 mr-2">💡</span>
+                          {suggestion}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Side-by-side Resume Comparison */}
+              <div className="grid lg:grid-cols-2 gap-8">
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4 text-gray-700">Your Original Resume</h3>
+                  <div className="bg-gray-50 p-4 rounded-lg h-96 overflow-y-auto">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700">{optimizationResult.originalResume}</pre>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4 text-green-700">AI-Optimized Resume</h3>
+                  <div className="bg-green-50 p-4 rounded-lg h-96 overflow-y-auto">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700">{optimizationResult.optimizedResume}</pre>
+                  </div>
+                  <div className="mt-4 flex space-x-3">
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(optimizationResult.optimizedResume);
+                        alert('Optimized resume copied to clipboard!');
+                      }}
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Copy to Clipboard
+                    </button>
+                    <button 
+                      onClick={() => analyticsService.trackActivity(currentUser.uid, 'resume_downloaded')}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      Download Resume
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -572,20 +673,26 @@ Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
     );
   };
 
-  // Dashboard Component with real Firebase data
+  // Enhanced Dashboard Component (keeping most of the original logic)
   const Dashboard = () => {
     const [userStats, setUserStats] = useState({
       totalOptimizations: 0,
-      successRate: 0,
+      averageAtsScore: 0,
       savedResumes: 0
     });
 
     useEffect(() => {
-      // Calculate user stats from optimizations
       if (userOptimizations.length > 0) {
+        // Calculate average ATS score from real data
+        const totalScore = userOptimizations.reduce((sum, opt) => {
+          const score = parseInt(opt.atsScore) || 0;
+          return sum + score;
+        }, 0);
+        const averageScore = Math.round(totalScore / userOptimizations.length);
+
         setUserStats({
           totalOptimizations: userOptimizations.length,
-          successRate: Math.floor(Math.random() * 30) + 70, // Mock success rate
+          averageAtsScore: averageScore,
           savedResumes: userOptimizations.length
         });
       }
@@ -620,8 +727,8 @@ Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
               <p className="text-3xl font-bold text-purple-600">{userStats.totalOptimizations}</p>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Success Rate</h3>
-              <p className="text-3xl font-bold text-green-600">{userStats.successRate}%</p>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Average ATS Score</h3>
+              <p className="text-3xl font-bold text-green-600">{userStats.averageAtsScore}%</p>
             </div>
             <div className="bg-white p-6 rounded-xl shadow-lg">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Saved Resumes</h3>
@@ -640,10 +747,15 @@ Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
                       <p className="text-sm text-gray-500">
                         Optimized {new Date(optimization.createdAt).toLocaleDateString()}
                       </p>
-                      <div className="mt-2">
+                      <div className="mt-2 flex space-x-2">
                         <span className="text-xs text-purple-600 bg-purple-100 px-2 py-1 rounded">
                           {optimization.keywords?.length || 0} keywords matched
                         </span>
+                        {optimization.atsScore && (
+                          <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                            {optimization.atsScore}% ATS Score
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex space-x-2">
@@ -690,7 +802,6 @@ Optimization score: ${Math.floor(Math.random() * 20) + 80}%`;
       
       {currentView === 'home' && <LandingPage />}
       {currentView === 'optimizer' && <ResumeOptimizer />}
-      {currentView === 'tracker' && <JobTracker currentUser={currentUser} />}
       {currentView === 'dashboard' && <Dashboard />}
       
       {showAuthModal && <AuthModal />}

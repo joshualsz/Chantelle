@@ -7,7 +7,6 @@ import {
   getDoc, 
   updateDoc, 
   deleteDoc, 
-  setDoc,
   query, 
   where, 
   orderBy, 
@@ -27,8 +26,8 @@ export const resumeOptimizationService = {
         optimizedResume: optimizationData.optimizedResume,
         keywords: optimizationData.keywords || [],
         improvements: optimizationData.improvements || [],
-        matchScore: optimizationData.matchScore || null,
-        analysisData: optimizationData.analysisData || null,
+        atsScore: optimizationData.atsScore || 0,
+        suggestions: optimizationData.suggestions || [],
         createdAt: new Date().toISOString(),
         jobTitle: optimizationData.jobTitle || 'Untitled Position'
       });
@@ -80,6 +79,20 @@ export const resumeOptimizationService = {
     }
   },
 
+  // Update an existing optimization
+  async updateOptimization(optimizationId, updateData) {
+    try {
+      const docRef = doc(db, 'optimizations', optimizationId);
+      await updateDoc(docRef, {
+        ...updateData,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error updating optimization:', error);
+      throw error;
+    }
+  },
+
   // Delete an optimization
   async deleteOptimization(optimizationId, userId) {
     try {
@@ -91,158 +104,14 @@ export const resumeOptimizationService = {
     }
   },
 
-  // Update user statistics
-  async updateUserStats(userId) {
-    try {
-      const userOptimizations = await this.getUserOptimizations(userId);
-      const userRef = doc(db, 'users', userId);
-      
-      await updateDoc(userRef, {
-        totalOptimizations: userOptimizations.length,
-        lastOptimization: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error updating user stats:', error);
-      throw error;
-    }
-  }
-};
-
-// Job tracking functions
-export const jobTrackingService = {
-  // Add a new job application
-  async addJobApplication(userId, jobData) {
-    try {
-      const docRef = await addDoc(collection(db, 'jobApplications'), {
-        userId,
-        role: jobData.role,
-        company: jobData.company,
-        status: jobData.status || 'pending',
-        dateApplied: jobData.dateApplied || new Date().toISOString(),
-        jobUrl: jobData.jobUrl || '',
-        notes: jobData.notes || '',
-        salary: jobData.salary || '',
-        location: jobData.location || '',
-        applicationMethod: jobData.applicationMethod || '',
-        contactPerson: jobData.contactPerson || '',
-        followUpDate: jobData.followUpDate || null,
-        interviewDate: jobData.interviewDate || null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      
-      return docRef.id;
-    } catch (error) {
-      console.error('Error adding job application:', error);
-      throw error;
-    }
-  },
-
-  // Get all job applications for a user
-  async getUserJobApplications(userId) {
-    try {
-      // First try a simple query without orderBy
-      const q = query(
-        collection(db, 'jobApplications'),
-        where('userId', '==', userId)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const applications = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-  
-      // Sort by date in JavaScript instead of Firestore
-      return applications.sort((a, b) => {
-        const dateA = new Date(a.dateApplied || a.createdAt);
-        const dateB = new Date(b.dateApplied || b.createdAt);
-        return dateB - dateA; // Newest first
-      });
-    } catch (error) {
-      console.error('Error getting job applications:', error);
-      // Return empty array instead of throwing error
-      return [];
-    }
-  },
-
-  // Get a specific job application
-  async getJobApplication(applicationId) {
-    try {
-      const docRef = doc(db, 'jobApplications', applicationId);
-      const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() };
-      } else {
-        throw new Error('Job application not found');
-      }
-    } catch (error) {
-      console.error('Error getting job application:', error);
-      throw error;
-    }
-  },
-
-  // Update job application
-  async updateJobApplication(applicationId, updateData) {
-    try {
-      const applicationRef = doc(db, 'jobApplications', applicationId);
-      await updateDoc(applicationRef, {
-        ...updateData,
-        updatedAt: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error updating job application:', error);
-      throw error;
-    }
-  },
-
-  // Delete job application
-  async deleteJobApplication(applicationId) {
-    try {
-      await deleteDoc(doc(db, 'jobApplications', applicationId));
-    } catch (error) {
-      console.error('Error deleting job application:', error);
-      throw error;
-    }
-  },
-
-  // Get job application statistics
-  async getJobStats(userId) {
-    try {
-      const applications = await this.getUserJobApplications(userId);
-      
-      const stats = {
-        total: applications.length,
-        pending: applications.filter(app => app.status === 'pending').length,
-        accepted: applications.filter(app => app.status === 'accepted').length,
-        rejected: applications.filter(app => app.status === 'rejected').length,
-        interviewed: applications.filter(app => app.status === 'interviewed').length,
-        withdrawn: applications.filter(app => app.status === 'withdrawn').length
-      };
-
-      // Calculate additional metrics
-      stats.responseRate = stats.total > 0 ? 
-        Math.round(((stats.interviewed + stats.accepted + stats.rejected) / stats.total) * 100) : 0;
-      
-      stats.successRate = stats.total > 0 ? 
-        Math.round((stats.accepted / stats.total) * 100) : 0;
-
-      return stats;
-    } catch (error) {
-      console.error('Error getting job stats:', error);
-      throw error;
-    }
-  },
-
-  // Get applications by status
-  async getApplicationsByStatus(userId, status) {
+  // Get optimizations by job title
+  async getOptimizationsByJobTitle(userId, jobTitle) {
     try {
       const q = query(
-        collection(db, 'jobApplications'),
+        collection(db, 'optimizations'),
         where('userId', '==', userId),
-        where('status', '==', status),
-        orderBy('dateApplied', 'desc')
+        where('jobTitle', '==', jobTitle),
+        orderBy('createdAt', 'desc')
       );
       
       const querySnapshot = await getDocs(q);
@@ -251,36 +120,102 @@ export const jobTrackingService = {
         ...doc.data()
       }));
     } catch (error) {
-      console.error('Error getting applications by status:', error);
+      console.error('Error getting optimizations by job title:', error);
       throw error;
     }
   },
 
-  // Get recent applications (last 30 days)
-  async getRecentApplications(userId, days = 30) {
+  // Get recent optimizations across all users (for admin/analytics)
+  async getRecentOptimizations(limitCount = 20) {
     try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const q = query(
+        collection(db, 'optimizations'),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
       
-      const applications = await this.getUserJobApplications(userId);
-      return applications.filter(app => 
-        new Date(app.dateApplied) >= cutoffDate
-      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
     } catch (error) {
-      console.error('Error getting recent applications:', error);
+      console.error('Error getting recent optimizations:', error);
       throw error;
     }
   },
 
-  // Bulk update applications
-  async bulkUpdateApplications(applicationIds, updateData) {
+  // Update user statistics
+  async updateUserStats(userId) {
     try {
-      const updatePromises = applicationIds.map(id => 
-        this.updateJobApplication(id, updateData)
-      );
-      await Promise.all(updatePromises);
+      const userOptimizations = await this.getUserOptimizations(userId);
+      const userRef = doc(db, 'users', userId);
+      
+      // Calculate average ATS score
+      const totalScore = userOptimizations.reduce((sum, opt) => {
+        return sum + (parseInt(opt.atsScore) || 0);
+      }, 0);
+      const averageAtsScore = userOptimizations.length > 0 
+        ? Math.round(totalScore / userOptimizations.length) 
+        : 0;
+      
+      // Find highest ATS score
+      const highestAtsScore = userOptimizations.reduce((max, opt) => {
+        const score = parseInt(opt.atsScore) || 0;
+        return score > max ? score : max;
+      }, 0);
+      
+      await updateDoc(userRef, {
+        totalOptimizations: userOptimizations.length,
+        averageAtsScore: averageAtsScore,
+        highestAtsScore: highestAtsScore,
+        lastOptimization: new Date().toISOString()
+      });
     } catch (error) {
-      console.error('Error bulk updating applications:', error);
+      console.error('Error updating user stats:', error);
+      // Don't throw error to prevent optimization save failure
+    }
+  },
+
+  // Get user optimization statistics
+  async getUserStats(userId) {
+    try {
+      const userOptimizations = await this.getUserOptimizations(userId);
+      
+      if (userOptimizations.length === 0) {
+        return {
+          totalOptimizations: 0,
+          averageAtsScore: 0,
+          highestAtsScore: 0,
+          mostRecentOptimization: null,
+          totalKeywordsAdded: 0
+        };
+      }
+      
+      const totalScore = userOptimizations.reduce((sum, opt) => {
+        return sum + (parseInt(opt.atsScore) || 0);
+      }, 0);
+      
+      const averageAtsScore = Math.round(totalScore / userOptimizations.length);
+      
+      const highestAtsScore = userOptimizations.reduce((max, opt) => {
+        const score = parseInt(opt.atsScore) || 0;
+        return score > max ? score : max;
+      }, 0);
+      
+      const totalKeywordsAdded = userOptimizations.reduce((sum, opt) => {
+        return sum + (opt.keywords?.length || 0);
+      }, 0);
+      
+      return {
+        totalOptimizations: userOptimizations.length,
+        averageAtsScore,
+        highestAtsScore,
+        mostRecentOptimization: userOptimizations[0],
+        totalKeywordsAdded
+      };
+    } catch (error) {
+      console.error('Error getting user stats:', error);
       throw error;
     }
   }
@@ -319,44 +254,39 @@ export const userService = {
     }
   },
 
-  // Create user profile
-  async createUserProfile(userId, profileData) {
+  // Create or update user preferences
+  async updateUserPreferences(userId, preferences) {
     try {
       const userRef = doc(db, 'users', userId);
-      await setDoc(userRef, {
-        ...profileData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        totalOptimizations: 0,
-        totalApplications: 0
+      await updateDoc(userRef, {
+        preferences: {
+          ...preferences,
+          updatedAt: new Date().toISOString()
+        },
+        updatedAt: new Date().toISOString()
       });
     } catch (error) {
-      console.error('Error creating user profile:', error);
+      console.error('Error updating user preferences:', error);
       throw error;
     }
   },
 
-  // Get user dashboard data
-  async getUserDashboardData(userId) {
+  // Get all users (admin function)
+  async getAllUsers(limitCount = 50) {
     try {
-      const [profile, optimizations, applications] = await Promise.all([
-        this.getUserProfile(userId),
-        resumeOptimizationService.getUserOptimizations(userId),
-        jobTrackingService.getUserJobApplications(userId)
-      ]);
-
-      const stats = await jobTrackingService.getJobStats(userId);
-
-      return {
-        profile,
-        optimizations: optimizations.slice(0, 5), // Last 5 optimizations
-        applications: applications.slice(0, 10), // Last 10 applications
-        stats,
-        totalOptimizations: optimizations.length,
-        totalApplications: applications.length
-      };
+      const q = query(
+        collection(db, 'users'),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
     } catch (error) {
-      console.error('Error getting user dashboard data:', error);
+      console.error('Error getting all users:', error);
       throw error;
     }
   }
@@ -369,12 +299,10 @@ export const analyticsService = {
     try {
       await addDoc(collection(db, 'analytics'), {
         userId,
-        activityType, // 'optimization_created', 'resume_downloaded', 'job_application_added', etc.
+        activityType, // 'optimization_started', 'optimization_completed', 'resume_downloaded', 'user_login', etc.
         data,
         timestamp: new Date().toISOString(),
-        sessionId: this.getSessionId(),
-        userAgent: navigator.userAgent,
-        platform: this.getPlatform()
+        date: new Date().toISOString().split('T')[0] // For daily aggregations
       });
     } catch (error) {
       console.error('Error tracking activity:', error);
@@ -404,11 +332,10 @@ export const analyticsService = {
   },
 
   // Get analytics by activity type
-  async getAnalyticsByType(userId, activityType, limitCount = 20) {
+  async getAnalyticsByType(activityType, limitCount = 100) {
     try {
       const q = query(
         collection(db, 'analytics'),
-        where('userId', '==', userId),
         where('activityType', '==', activityType),
         orderBy('timestamp', 'desc'),
         limit(limitCount)
@@ -425,117 +352,132 @@ export const analyticsService = {
     }
   },
 
-  // Track page view
-  async trackPageView(userId, page, data = {}) {
-    await this.trackActivity(userId, 'page_view', {
-      page,
-      ...data
-    });
-  },
-
-  // Track feature usage
-  async trackFeatureUsage(userId, feature, action, data = {}) {
-    await this.trackActivity(userId, 'feature_usage', {
-      feature,
-      action,
-      ...data
-    });
-  },
-
-  // Helper function to get session ID
-  getSessionId() {
-    if (!window.sessionStorage.getItem('sessionId')) {
-      window.sessionStorage.setItem('sessionId', 
-        Date.now().toString() + Math.random().toString(36).substr(2, 9)
-      );
-    }
-    return window.sessionStorage.getItem('sessionId');
-  },
-
-  // Helper function to get platform
-  getPlatform() {
-    const userAgent = navigator.userAgent.toLowerCase();
-    if (userAgent.includes('mobile')) return 'mobile';
-    if (userAgent.includes('tablet')) return 'tablet';
-    return 'desktop';
-  },
-
-  // Get user engagement metrics
-  async getUserEngagement(userId, days = 30) {
+  // Get daily analytics summary
+  async getDailyAnalytics(date = new Date().toISOString().split('T')[0]) {
     try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - days);
-      
-      const analytics = await this.getUserAnalytics(userId, 1000);
-      const recentAnalytics = analytics.filter(item => 
-        new Date(item.timestamp) >= cutoffDate
+      const q = query(
+        collection(db, 'analytics'),
+        where('date', '==', date),
+        orderBy('timestamp', 'desc')
       );
-
-      const engagement = {
-        totalActivities: recentAnalytics.length,
-        uniqueDays: new Set(recentAnalytics.map(item => 
-          new Date(item.timestamp).toDateString()
-        )).size,
-        mostUsedFeatures: this.getMostUsedFeatures(recentAnalytics),
-        averageSessionLength: this.calculateAverageSessionLength(recentAnalytics)
+      
+      const querySnapshot = await getDocs(q);
+      const activities = querySnapshot.docs.map(doc => doc.data());
+      
+      // Aggregate by activity type
+      const summary = activities.reduce((acc, activity) => {
+        if (!acc[activity.activityType]) {
+          acc[activity.activityType] = 0;
+        }
+        acc[activity.activityType]++;
+        return acc;
+      }, {});
+      
+      return {
+        date,
+        totalActivities: activities.length,
+        uniqueUsers: new Set(activities.map(a => a.userId)).size,
+        activityBreakdown: summary
       };
-
-      return engagement;
     } catch (error) {
-      console.error('Error getting user engagement:', error);
+      console.error('Error getting daily analytics:', error);
+      throw error;
+    }
+  }
+};
+
+// Cover letter functions (for future expansion)
+export const coverLetterService = {
+  // Save a generated cover letter
+  async saveCoverLetter(userId, coverLetterData) {
+    try {
+      const docRef = await addDoc(collection(db, 'coverLetters'), {
+        userId,
+        content: coverLetterData.content,
+        jobTitle: coverLetterData.jobTitle,
+        companyName: coverLetterData.companyName,
+        jobDescription: coverLetterData.jobDescription,
+        resumeId: coverLetterData.resumeId, // Link to optimization if available
+        createdAt: new Date().toISOString()
+      });
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error saving cover letter:', error);
       throw error;
     }
   },
 
-  // Helper function to get most used features
-  getMostUsedFeatures(analytics) {
-    const featureCount = {};
-    analytics.forEach(item => {
-      if (item.data && item.data.feature) {
-        featureCount[item.data.feature] = (featureCount[item.data.feature] || 0) + 1;
-      }
-    });
-
-    return Object.entries(featureCount)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 5)
-      .map(([feature, count]) => ({ feature, count }));
+  // Get user's cover letters
+  async getUserCoverLetters(userId) {
+    try {
+      const q = query(
+        collection(db, 'coverLetters'),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting cover letters:', error);
+      throw error;
+    }
   },
 
-  // Helper function to calculate average session length
-  calculateAverageSessionLength(analytics) {
-    const sessions = {};
-    
-    analytics.forEach(item => {
-      if (!sessions[item.sessionId]) {
-        sessions[item.sessionId] = {
-          start: new Date(item.timestamp),
-          end: new Date(item.timestamp)
-        };
-      } else {
-        const timestamp = new Date(item.timestamp);
-        if (timestamp < sessions[item.sessionId].start) {
-          sessions[item.sessionId].start = timestamp;
-        }
-        if (timestamp > sessions[item.sessionId].end) {
-          sessions[item.sessionId].end = timestamp;
-        }
-      }
-    });
-
-    const sessionLengths = Object.values(sessions).map(session => 
-      session.end - session.start
-    );
-
-    return sessionLengths.length > 0 ? 
-      sessionLengths.reduce((a, b) => a + b, 0) / sessionLengths.length : 0;
+  // Delete a cover letter
+  async deleteCoverLetter(coverLetterId) {
+    try {
+      await deleteDoc(doc(db, 'coverLetters', coverLetterId));
+    } catch (error) {
+      console.error('Error deleting cover letter:', error);
+      throw error;
+    }
   }
 };
 
-// Export all services as default
-export default {
-  resumeOptimizationService,
-  jobTrackingService,
-  userService,
-  analyticsService
+// Feedback and support functions
+export const feedbackService = {
+  // Submit user feedback
+  async submitFeedback(userId, feedbackData) {
+    try {
+      const docRef = await addDoc(collection(db, 'feedback'), {
+        userId,
+        type: feedbackData.type, // 'bug', 'feature', 'general'
+        message: feedbackData.message,
+        rating: feedbackData.rating,
+        email: feedbackData.email,
+        status: 'new',
+        createdAt: new Date().toISOString()
+      });
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      throw error;
+    }
+  },
+
+  // Get user's feedback history
+  async getUserFeedback(userId) {
+    try {
+      const q = query(
+        collection(db, 'feedback'),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting user feedback:', error);
+      throw error;
+    }
+  }
 };
